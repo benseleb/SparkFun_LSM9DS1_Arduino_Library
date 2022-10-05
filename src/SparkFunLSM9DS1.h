@@ -83,7 +83,6 @@ public:
 	//   defaults to Wire, but if hardware supports it, can use other TwoWire ports.
 	//   **For SPI use "beginSPI()", and only send first two address arguments.
 	uint16_t begin(uint8_t agAddress = LSM9DS1_AG_ADDR(1), uint8_t mAddress = LSM9DS1_M_ADDR(1), TwoWire &wirePort = Wire); //By default use the default I2C addres, and use Wire port
-	uint16_t beginSPI(uint8_t ag_CS_pin, uint8_t m_CS_pin);
 	
 	void calibrate(bool autoCalc = true);
 	void calibrateMag(bool loadIn = true);
@@ -458,39 +457,6 @@ protected:
 	// Helper Functions //
 	//////////////////////
 	void constrainScales();
-	
-	///////////////////
-	// SPI Functions //
-	///////////////////
-	// initSPI() -- Initialize the SPI hardware.
-	// This function will setup all SPI pins and related hardware.
-	void initSPI();
-	
-	// SPIwriteByte() -- Write a byte out of SPI to a register in the device
-	// Input:
-	//	- csPin = The chip select pin of the slave device.
-	//	- subAddress = The register to be written to.
-	//	- data = Byte to be written to the register.
-	void SPIwriteByte(uint8_t csPin, uint8_t subAddress, uint8_t data);
-	
-	// SPIreadByte() -- Read a single byte from a register over SPI.
-	// Input:
-	//	- csPin = The chip select pin of the slave device.
-	//	- subAddress = The register to be read from.
-	// Output:
-	//	- The byte read from the requested address.
-	uint8_t SPIreadByte(uint8_t csPin, uint8_t subAddress);
-	
-	// SPIreadBytes() -- Read a series of bytes, starting at a register via SPI
-	// Input:
-	//	- csPin = The chip select pin of a slave device.
-	//	- subAddress = The register to begin reading.
-	// 	- * dest = Pointer to an array where we'll store the readings.
-	//	- count = Number of registers to be read.
-	// Output: No value is returned by the function, but the registers read are
-	// 		all stored in the *dest array given.
-	uint8_t SPIreadBytes(uint8_t csPin, uint8_t subAddress, 
-							uint8_t * dest, uint8_t count);
 	
 	///////////////////
 	// I2C Functions //
