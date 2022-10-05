@@ -7,7 +7,7 @@ https://github.com/sparkfun/LSM9DS1_Breakout
 
 This file implements all functions of the LSM9DS1 class. Functions here range
 from higher level stuff, like reading/writing LSM9DS1 registers to low-level,
-hardware reads and writes. Both SPI and I2C handler functions can be found
+hardware reads and writes. I2C handler functions can be found
 towards the bottom of this file.
 
 Development environment specifics:
@@ -25,7 +25,6 @@ Distributed as-is; no warranty is given.
 #include "LSM9DS1_Registers.h"
 #include "LSM9DS1_Types.h"
 #include <Wire.h> // Wire library is used for I2C
-#include <SPI.h>  // SPI library is used for...SPI.
 
 #if defined(ARDUINO) && ARDUINO >= 100
   #include "Arduino.h"
@@ -64,7 +63,7 @@ void LSM9DS1::init()
 	// 1 = 14.9    4 = 238
 	// 2 = 59.5    5 = 476
 	// 3 = 119     6 = 952
-	settings.gyro.sampleRate = 6;
+	settings.gyro.sampleRate = 4;
 	// gyro cutoff frequency: value between 0-3
 	// Actual value of cutoff frequency depends
 	// on sample rate.
@@ -86,12 +85,12 @@ void LSM9DS1::init()
 	settings.accel.enableY = true;
 	settings.accel.enableZ = true;
 	// accel scale can be 2, 4, 8, or 16
-	settings.accel.scale = 2;
+	settings.accel.scale = 8;
 	// accel sample rate can be 1-6
 	// 1 = 10 Hz    4 = 238 Hz
 	// 2 = 50 Hz    5 = 476 Hz
 	// 3 = 119 Hz   6 = 952 Hz
-	settings.accel.sampleRate = 6;
+	settings.accel.sampleRate = 4;
 	// Accel cutoff freqeuncy can be any value between -1 - 3. 
 	// -1 = bandwidth determined by sample rate
 	// 0 = 408 Hz   2 = 105 Hz
@@ -104,7 +103,7 @@ void LSM9DS1::init()
 	// 1 = ODR/100   3 = ODR/400
 	settings.accel.highResBandwidth = 0;
 
-	settings.mag.enabled = true;
+	settings.mag.enabled = false;
 	// mag scale can be 4, 8, 12, or 16
 	settings.mag.scale = 4;
 	// mag data rate can be 0-7
@@ -164,51 +163,6 @@ uint16_t LSM9DS1::begin(uint8_t agAddress, uint8_t mAddress, TwoWire &wirePort)
 	// We expect caller to begin their I2C port, with the speed of their choice external to the library
 	// But if they forget, we could start the hardware here.
 	// settings.device.i2c->begin();	// Initialize I2C library
-		
-	// To verify communication, we can read from the WHO_AM_I register of
-	// each device. Store those in a variable so we can return them.
-	uint8_t mTest = mReadByte(WHO_AM_I_M);		// Read the gyro WHO_AM_I
-	uint8_t xgTest = xgReadByte(WHO_AM_I_XG);	// Read the accel/mag WHO_AM_I
-	uint16_t whoAmICombined = (xgTest << 8) | mTest;
-	
-	if (whoAmICombined != ((WHO_AM_I_AG_RSP << 8) | WHO_AM_I_M_RSP))
-		return 0;
-	
-	// Gyro initialization stuff:
-	initGyro();	// This will "turn on" the gyro. Setting up interrupts, etc.
-	
-	// Accelerometer initialization stuff:
-	initAccel(); // "Turn on" all axes of the accel. Set up interrupts, etc.
-	
-	// Magnetometer initialization stuff:
-	initMag(); // "Turn on" all axes of the mag. Set up interrupts, etc.
-
-	// Once everything is initialized, return the WHO_AM_I registers we read:
-	return whoAmICombined;
-}
-
-uint16_t LSM9DS1::beginSPI(uint8_t ag_CS_pin, uint8_t m_CS_pin)
-{
-	// Set device settings, they are used in many other places
-	settings.device.commInterface = IMU_MODE_SPI;
-	settings.device.agAddress = ag_CS_pin;
-	settings.device.mAddress = m_CS_pin;	
-	
-	//! Todo: don't use _xgAddress or _mAddress, duplicating memory
-	_xgAddress = settings.device.agAddress;
-	_mAddress = settings.device.mAddress;
-	
-	init();
-	
-	constrainScales();
-	// Once we have the scale values, we can calculate the resolution
-	// of each sensor. That's what these functions are for. One for each sensor
-	calcgRes(); // Calculate DPS / ADC tick, stored in gRes variable
-	calcmRes(); // Calculate Gs / ADC tick, stored in mRes variable
-	calcaRes(); // Calculate g / ADC tick, stored in aRes variable
-	
-	// Now, initialize our hardware interface.
-	initSPI();	// Initialize SPI
 		
 	// To verify communication, we can read from the WHO_AM_I register of
 	// each device. Store those in a variable so we can return them.
@@ -497,7 +451,6 @@ void LSM9DS1::initMag()
 	// [I2C_DISABLE][0][LP][0][0][SIM][MD1][MD0]
 	// I2C_DISABLE - Disable I2C interace (0:enable, 1:disable)
 	// LP - Low-power mode cofiguration (1:enable)
-	// SIM - SPI mode selection (0:write-only, 1:read/write enable)
 	// MD[1:0] - Operating mode
 	//	00:continuous conversion, 01:single-conversion,
 	//  10,11: Power-down
@@ -1067,124 +1020,48 @@ void LSM9DS1::constrainScales()
 
 void LSM9DS1::xgWriteByte(uint8_t subAddress, uint8_t data)
 {
-	// Whether we're using I2C or SPI, write a byte using the
-	// gyro-specific I2C address or SPI CS pin.
+	// Write a byte using the gyro-specific I2C address.
 	if (settings.device.commInterface == IMU_MODE_I2C)
 		I2CwriteByte(_xgAddress, subAddress, data);
-	else if (settings.device.commInterface == IMU_MODE_SPI)
-		SPIwriteByte(_xgAddress, subAddress, data);
 }
 
 void LSM9DS1::mWriteByte(uint8_t subAddress, uint8_t data)
 {
-	// Whether we're using I2C or SPI, write a byte using the
-	// accelerometer-specific I2C address or SPI CS pin.
+	// Write a byte using the accelerometer-specific I2C address.
 	if (settings.device.commInterface == IMU_MODE_I2C)
 		return I2CwriteByte(_mAddress, subAddress, data);
-	else if (settings.device.commInterface == IMU_MODE_SPI)
-		return SPIwriteByte(_mAddress, subAddress, data);
 }
 
 uint8_t LSM9DS1::xgReadByte(uint8_t subAddress)
 {
-	// Whether we're using I2C or SPI, read a byte using the
-	// gyro-specific I2C address or SPI CS pin.
+	// Read a byte using the gyro-specific I2C address.
 	if (settings.device.commInterface == IMU_MODE_I2C)
 		return I2CreadByte(_xgAddress, subAddress);
-	else if (settings.device.commInterface == IMU_MODE_SPI)
-		return SPIreadByte(_xgAddress, subAddress);
 	return -1;
 }
 
 uint8_t LSM9DS1::xgReadBytes(uint8_t subAddress, uint8_t * dest, uint8_t count)
 {
-	// Whether we're using I2C or SPI, read multiple bytes using the
-	// gyro-specific I2C address or SPI CS pin.
+	// Read multiple bytes using the gyro-specific I2C address.
 	if (settings.device.commInterface == IMU_MODE_I2C)
 		return I2CreadBytes(_xgAddress, subAddress, dest, count);
-	else if (settings.device.commInterface == IMU_MODE_SPI)
-		return SPIreadBytes(_xgAddress, subAddress, dest, count);
 	return -1;
 }
 
 uint8_t LSM9DS1::mReadByte(uint8_t subAddress)
 {
-	// Whether we're using I2C or SPI, read a byte using the
-	// accelerometer-specific I2C address or SPI CS pin.
+	// Read a byte using the accelerometer-specific I2C address.
 	if (settings.device.commInterface == IMU_MODE_I2C)
 		return I2CreadByte(_mAddress, subAddress);
-	else if (settings.device.commInterface == IMU_MODE_SPI)
-		return SPIreadByte(_mAddress, subAddress);
 	return -1;
 }
 
 uint8_t LSM9DS1::mReadBytes(uint8_t subAddress, uint8_t * dest, uint8_t count)
 {
-	// Whether we're using I2C or SPI, read multiple bytes using the
-	// accelerometer-specific I2C address or SPI CS pin.
+	// Read multiple bytes using the accelerometer-specific I2C address.
 	if (settings.device.commInterface == IMU_MODE_I2C)
 		return I2CreadBytes(_mAddress, subAddress, dest, count);
-	else if (settings.device.commInterface == IMU_MODE_SPI)
-		return SPIreadBytes(_mAddress, subAddress, dest, count);
 	return -1;
-}
-
-void LSM9DS1::initSPI()
-{
-	pinMode(_xgAddress, OUTPUT);
-	digitalWrite(_xgAddress, HIGH);
-	pinMode(_mAddress, OUTPUT);
-	digitalWrite(_mAddress, HIGH);
-	
-	SPI.begin();
-	// Maximum SPI frequency is 10MHz
-	// Data is read and written MSb first.
-	// Data is read and written MSb first.
-	// Data is captured on rising edge of clock (CPHA = 0)
-	// Base value of the clock is HIGH (CPOL = 1)
-	SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
-}
-
-void LSM9DS1::SPIwriteByte(uint8_t csPin, uint8_t subAddress, uint8_t data)
-{
-	digitalWrite(csPin, LOW); // Initiate communication
-	
-	// If write, bit 0 (MSB) should be 0
-	// If single write, bit 1 should be 0
-	SPI.transfer(subAddress & 0x3F); // Send Address
-	SPI.transfer(data); // Send data
-	
-	digitalWrite(csPin, HIGH); // Close communication
-}
-
-uint8_t LSM9DS1::SPIreadByte(uint8_t csPin, uint8_t subAddress)
-{
-	uint8_t temp;
-	// Use the multiple read function to read 1 byte. 
-	// Value is returned to `temp`.
-	SPIreadBytes(csPin, subAddress, &temp, 1);
-	return temp;
-}
-
-uint8_t LSM9DS1::SPIreadBytes(uint8_t csPin, uint8_t subAddress,
-							uint8_t * dest, uint8_t count)
-{
-	// To indicate a read, set bit 0 (msb) of first byte to 1
-	uint8_t rAddress = 0x80 | (subAddress & 0x3F);
-	// Mag SPI port is different. If we're reading multiple bytes, 
-	// set bit 1 to 1. The remaining six bytes are the address to be read
-	if ((csPin == _mAddress) && count > 1)
-		rAddress |= 0x40;
-	
-	digitalWrite(csPin, LOW); // Initiate communication
-	SPI.transfer(rAddress);
-	for (int i=0; i<count; i++)
-	{
-		dest[i] = SPI.transfer(0x00); // Read into destination array
-	}
-	digitalWrite(csPin, HIGH); // Close communication
-	
-	return count;
 }
 
 // Wire.h read and write protocols
